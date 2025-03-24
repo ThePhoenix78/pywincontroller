@@ -1,4 +1,8 @@
 import sys
+import time
+import asyncio
+import threading
+
 import pywinauto
 
 
@@ -52,6 +56,10 @@ class WinController:
         self.main_process: str = main_process
         self.process_name: str = process_name
 
+        self.fps: int = fps
+        self._refresh: float = 1 / self.fps
+
+        self._run: bool = False
         self._focus: bool = True
 
         try:
@@ -76,6 +84,7 @@ class WinController:
         return self.main_win.capture_as_image(self.main_win.rectangle())
 
     def stop(self):
+        self._run: bool = False
         self.release_all()
 
     def focus(self):
@@ -208,3 +217,48 @@ class WinController:
 
         actions.clear()
         buttons.clear()
+
+    async def _run_async(self):
+        await asyncio.sleep(.01)
+
+        while self._run:
+            await self._to_call()
+            await asyncio.sleep(self._refresh)
+
+    def _run_sync(self):
+        time.sleep(.01)
+
+        while self._run:
+            self._to_call()
+            time.sleep(self._refresh)
+
+    def _check_run_async(self, run_async: bool = True):
+        if not self._run:
+            self._run: bool = True
+
+            if run_async:
+                self.start_async_thread(self._run_async())
+
+            else:
+                threading.Thread(target=self._run_sync).start()
+
+    def start_async_thread(self, awaitable):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        threading.Thread(target=loop.run_forever).start()
+        asyncio.run_coroutine_threadsafe(awaitable, loop)
+        return loop
+
+    def stop_async_thread(self, loop):
+        loop.call_soon_threadsafe(loop.stop)
+
+    def on_update(self, callback: callable = None):
+        def add_debug(func):
+            self._check_run_async(asyncio.iscoroutinefunction(func))
+            self._to_call: callable = func
+            return func
+
+        if callable(callback):
+            return add_debug(callback)
+
+        return add_debug
