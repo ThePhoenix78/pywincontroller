@@ -52,12 +52,12 @@ class RECT():
 
 
 class WinController:
-    def __init__(self, main_process: str, process_name: str, fps: int = 60):
+    def __init__(self, main_process: str, process_name: str, input_per_sec: int = 1):
         self.main_process: str = main_process
         self.process_name: str = process_name
 
-        self.fps: int = fps
-        self._refresh: float = 1 / self.fps
+        self.input_per_sec: int = input_per_sec
+        self._refresh: float = 1 / self.input_per_sec
 
         self._run: bool = False
         self._focus: bool = True
@@ -131,9 +131,9 @@ class WinController:
         self.focus()
         self.main_win.drag_mouse_input(dst=(x, y), button=button, pressed=key_pressed, absolute=False)
 
-    def click(self, button: str = "left", double: bool = False):
+    def click(self, button: str = "left", double: bool = False, coords: tuple = (None, None)):
         self.focus()
-        self.main_win.click_input(button=button, double=double)
+        self.main_win.click_input(button=button, double=double, coords=coords)
 
     def press_cursor(self, button: str = "left", coords: tuple = (None, None), key_pressed: str = ""):
         self.focus()
@@ -143,7 +143,7 @@ class WinController:
         self.focus()
         self.main_win.release_mouse_input(button=button, coords=coords, pressed=key_pressed, absolute=False)
 
-    def do(self, actions: list = [], buttons: list = []):
+    def do(self, actions: list = [], buttons: list = [], coords: tuple = (None, None)):
         self.last_buttons[1]: list = self.last_buttons[0]
         undo: list = []
 
@@ -178,7 +178,7 @@ class WinController:
 
             if "CLICK" in button:
                 button: str = button.split("_")[-1].lower()
-                self.click(button=button)
+                self.click(button=button, coords=coords)
                 continue
 
             self.press(button)
@@ -186,7 +186,7 @@ class WinController:
         actions.clear()
         buttons.clear()
 
-    def undo(self, actions: list = [], buttons: list = []):
+    def undo(self, actions: list = [], buttons: list = [], coords: tuple = (None, None)):
         if actions == [] and buttons == []:
             return
 
@@ -207,7 +207,7 @@ class WinController:
 
             if "CLICK" in button:
                 button: str = button.split("_")[-1].lower()
-                self.release_cursor(button=button)
+                self.release_cursor(button=button, coords=coords)
                 continue
 
             self.release(button)
@@ -232,7 +232,7 @@ class WinController:
             self._to_call()
             time.sleep(self._refresh)
 
-    def _check_run_async(self, run_async: bool = True):
+    def _check_run(self, run_async: bool = True):
         if not self._run:
             self._run: bool = True
 
@@ -254,7 +254,7 @@ class WinController:
 
     def on_update(self, callback: callable = None):
         def add_debug(func):
-            self._check_run_async(asyncio.iscoroutinefunction(func))
+            self._check_run(asyncio.iscoroutinefunction(func))
             self._to_call: callable = func
             return func
 

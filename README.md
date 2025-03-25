@@ -36,7 +36,7 @@ Controls a Windows application window.
 #### Attributes:
 - `main_process` (str): Path of the main executable.
 - `process_name` (str): Name of the window process.
-- `fps` (int): Frames per second for refresh.
+- `input_per_sec` (int): Amount of inputs per second / refresh rate between 2 actions.
 - `actions` (dict): Mapping of action names to key bindings.
 
 #### Methods:
@@ -55,6 +55,8 @@ Controls a Windows application window.
 - `release_cursor(button, coords, key_pressed)`: Releases a mouse button at given coordinates.
 - `do(actions, buttons)`: Performs a series of actions.
 - `undo(actions, buttons)`: Reverts performed actions.
+
+#### Callback / Decorator :
 - `on_update(callback)`: Registers an update callback function.
 
 
@@ -64,8 +66,8 @@ from pywincontroller import WinController, RECT
 
 
 class MarioBros(WinController):
-    def __init__(self, fps: int = 30):
-        WinController.__init__(self, main_process="Mesen", process_name="Mesen - Super Mario Bros. (Europe) (Rev A)", fps=fps)
+    def __init__(self, input_per_sec: int = 3):
+        WinController.__init__(self, main_process="Mesen", process_name="Mesen - Super Mario Bros. (Europe) (Rev A)", input_per_sec=input_per_sec)
 
         self.actions: dict = {
             "JUMP": "k",
@@ -95,7 +97,7 @@ class MarioBros(WinController):
 
 
 
-mb = MarioBros(fps=15)
+mb = MarioBros(input_per_sec=3)
 mb.focus()
 iter = 0
 
