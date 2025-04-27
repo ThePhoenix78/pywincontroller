@@ -1,54 +1,14 @@
-import sys
-import time
-import asyncio
-import threading
+from ctypes import windll, wintypes, byref
 
+import pywinauto.win32_hooks
 import pywinauto
 
+import threading
+import asyncio
+import time
+import sys
 
-class COORDS:
-    def __init__(self, x: int, y: int):
-        self.x: int = x
-        self.y: int = y
-
-
-class RECT():
-    def __init__(self, left: int, top: int, right: int = None, bottom: int = None, width: int = None, height: int = None):
-        self.left: int = left
-        self.top: int = top
-
-        if right is not None:
-            self.right: int = right
-
-        elif width is not None:
-            self.right: int = self.left + width
-
-        else:
-            raise "Error, set at least right or width"
-
-        if bottom is not None:
-            self.bottom: int = bottom
-
-        elif width is not None:
-            self.bottom: int = self.top + height
-
-        else:
-            raise "Error, set at least bottom or width"
-
-        self._width: int = width if width is not None else self.width()
-        self._height: int = height if height is not None else self.height()
-        self._middle: COORDS = self.mid_point()
-
-    def width(self):
-        return abs(self.right-self.left)
-
-    def height(self):
-        return abs(self.bottom-self.top)
-
-    def mid_point(self):
-        x: int = self.left + int(float(self._width) / 2.)
-        y: int = self.top + int(float(self._height) / 2.)
-        return COORDS(x, y)
+from .utils import COORDS, RECT, InputEvent
 
 
 class WinController:
@@ -85,6 +45,21 @@ class WinController:
 
     def to_image(self):
         return self.main_win.capture_as_image(self.main_win.rectangle())
+
+    def get_cursor_pos(self):
+        cursor = wintypes.POINT()
+        windll.user32.GetCursorPos(byref(cursor))
+        return COORDS(cursor.x, cursor.y)
+
+    def get_capture(self, size: int, center: tuple = None):
+        if isinstance(center, tuple) or isinstance(center, list):
+            center: COORDS = COORDS(center[0], center[1])
+
+        elif center is None:
+            center: COORDS = self.get_cursor_pos()
+
+        rect: RECT = RECT(width=size, middle=center)
+        return self.main_win.capture_as_image(rect)
 
     def stop(self):
         self._run: bool = False
@@ -145,6 +120,9 @@ class WinController:
     def release_cursor(self, button: str = "left", coords: tuple = (None, None), key_pressed: str = ""):
         self.focus()
         self.main_win.release_mouse_input(button=button, coords=coords, pressed=key_pressed, absolute=False)
+
+    def client_to_screen(self, client_point):
+        self.main_win.client_to_screen(client_point)
 
     def do(self, actions: list = [], buttons: list = [], coords: tuple = (None, None)):
         self.last_buttons[1]: list = self.last_buttons[0]
@@ -221,30 +199,30 @@ class WinController:
         actions.clear()
         buttons.clear()
 
-    async def _run_async(self):
+    async def _run_async_update(self):
         await asyncio.sleep(.01)
 
         while self._run:
-            await self._to_call()
+            await self._to_call_update()
             await asyncio.sleep(self._refresh)
 
-    def _run_sync(self):
+    def _run_sync_update(self):
         time.sleep(.01)
 
         while self._run:
-            self._to_call()
+            self._to_call_update()
             time.sleep(self._refresh)
 
-    def _check_run(self, run_async: bool = True):
+    def _check_run_update(self, run_async: bool = True):
         if not self._run:
             self._run: bool = True
 
             if run_async:
-                self.start_async_thread(self._run_async())
+                self.start_async_thread(self._run_async_update())
 
             else:
-                threading.Thread(target=self._run_sync).start()
-                
+                threading.Thread(target=self._run_sync_update).start()
+
     # https://gist.github.com/ultrafunkamsterdam/8be3d55ac45759aa1bd843ab64ce876d#file-python-3-6-asyncio-multiple-async-event-loops-in-multiple-threads-running-and-shutting-down-gracefully-py-L15
     def create_bg_loop(self):
         def to_bg(loop):
@@ -288,11 +266,34 @@ class WinController:
 
     def on_update(self, callback: callable = None):
         def add_debug(func):
-            self._check_run(asyncio.iscoroutinefunction(func))
-            self._to_call: callable = func
+            self._check_run_update(asyncio.iscoroutinefunction(func))
+            self._to_call_update: callable = func
             return func
 
         if callable(callback):
             return add_debug(callback)
 
         return add_debug
+
+    def on_event(self, data):
+        data: InputEvent = InputEvent(data)
+        return self._to_call_event(data)
+
+    def on_input(self, callback: callable = None, keyboard: bool = True, mouse: bool = False):
+        if isinstance(callback, bool):
+            keyboard: bool = callback
+            callback = None
+
+        self.hook = pywinauto.win32_hooks.Hook()
+
+        def add_event(func):
+            self._to_call_event: callable = func
+            self.hook.handler = self.on_event
+            threading.Thread(target=self.hook.hook, kwargs={"keyboard": keyboard, "mouse": mouse}).start()
+            # self.hook.hook(keyboard=keyboard, mouse=mouse)
+            return func
+
+        if callable(callback):
+            return add_event(callback)
+
+        return add_event
