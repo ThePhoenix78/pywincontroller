@@ -63,17 +63,42 @@ class RECT():
 
 
 class InputEvent:
-    def __init__(self, event):
+    def __init__(self, event, cursor_pos: COORDS):
         self.event = event
-        self.current_key = event.current_key
-        self.event_type = event.event_type
+        self.current_key: str = event.current_key
+        self.event_type: str = event.event_type
+        self.x, self.y = cursor_pos.x, cursor_pos.y
 
         if isinstance(event, pywinauto.win32_hooks.KeyboardEvent):
-            self.pressed_key = event.pressed_key
-            self.mouse_x = None
-            self.mouse_y = None
+            self.event_input: str = "keyboard"
+            self.pressed_key: list = event.pressed_key
+            self.mouse_x: int = self.x
+            self.mouse_y: int = self.y
 
         if isinstance(event, pywinauto.win32_hooks.MouseEvent):
-            self.mouse_x = event.mouse_x
-            self.mouse_y = event.mouse_y
+            self.event_input: str = "mouse"
+            self.mouse_x: int = event.mouse_x
+            self.mouse_y: int = event.mouse_y
             self.pressed_key = None
+
+
+class PynputEvent:
+    def __init__(self, x: int = None, y: int = None, button: str = None, pressed: bool = None, key: str = None, event_input: str = None, event_type: str = None, cursor_pos: COORDS=None):
+        self.x: int = x if x is not None else cursor_pos.x
+        self.y: int = y if y is not None else cursor_pos.y
+        self.current_key: str = button if button is not None else key
+
+        self.button: str = button
+        self.key: str = key
+
+        self.event_input: str = event_input
+        self.event_type: str = event_type
+        self.pressed_key: list = [button] if button is not None else [key]
+
+        self.pressed: bool = pressed
+
+        if event_type == "on click" and pressed == False:
+            self.event_type: str = "key up"
+
+        elif event_type == "on click" and pressed == True:
+            self.event_type: str = "key down"

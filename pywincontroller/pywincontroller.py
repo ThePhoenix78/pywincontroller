@@ -1,18 +1,16 @@
 from ctypes import windll, wintypes, byref
 
-import pywinauto.win32_hooks
 import pywinauto
 
 import threading
 import asyncio
 import time
-import sys
 
-from .utils import COORDS, RECT, InputEvent
+from .utils import COORDS, RECT, InputEvent, PynputEvent
 
 
 class WinController:
-    def __init__(self, main_process: str, process_name: str, input_per_sec: int = 1):
+    def __init__(self, main_process: str = None, process_name: str = None, input_per_sec: int = 1):
         self.main_process: str = main_process
         self.process_name: str = process_name
 
@@ -20,21 +18,29 @@ class WinController:
         self._refresh: float = 1 / self.input_per_sec
 
         self._run: bool = False
-        self._focus: bool = True
+        self._focus: bool = False
+
+        self.core: str = None
+
+        self.app = None
+        self.main_win = None
 
         self.test: str = "no"
 
-        try:
-            self.app = pywinauto.Application().connect(path=self.main_process)
-            self.main_win = self.app[self.process_name]
-        except Exception as e:
-            sys.exit(e)
+        if main_process is not None and process_name is not None:
+            try:
+                self.app = pywinauto.Application().connect(path=self.main_process)
+                self.main_win = self.app[self.process_name]
+                self._focus: bool = True
+            except Exception as e:
+                print("WARNING", type(e), e)
 
         self.actions: dict = {}
         self.last_buttons: list = [[], []]
 
-        self.update_window()
-        self.focus()
+        if self.main_win is not None:
+            self.update_window()
+            self.focus()
 
     def update_window(self):
         rect = self.main_win.rectangle()
@@ -64,6 +70,20 @@ class WinController:
     def stop(self):
         self._run: bool = False
         self.release_all()
+
+        if self.core == "pywinauto":
+            if self.k_listener is not None:
+                self.hook.unhook_keyboard()
+
+            if self.m_listener is not None:
+                self.hook.unhook_mouse()
+
+        elif self.core == "pynput":
+            if self.k_listener is not None:
+                self.k_listener.stop()
+
+            if self.m_listener is not None:
+                self.m_listener.stop()
 
     def focus(self):
         if self._focus:
@@ -275,25 +295,93 @@ class WinController:
 
         return add_debug
 
-    def on_event(self, data):
-        data: InputEvent = InputEvent(data)
+    def on_event1(self, data):
+        data: InputEvent = InputEvent(data, self.get_cursor_pos())
         return self._to_call_event(data)
 
-    def on_input(self, callback: callable = None, keyboard: bool = True, mouse: bool = False):
+    def on_move(self, x, y):
+        data = PynputEvent(x=x, y=y, event_input="mouse", event_type="on move")
+        self._to_call_event(data)
+
+    def on_click(self, x, y, button, pressed):
+        print(pressed)
+        data = PynputEvent(x=x, y=y, button=button, pressed=pressed, event_input="mouse", event_type="on click")
+        self._to_call_event(data)
+
+    def on_scroll(self, x, y, dx, dy):
+        data = PynputEvent(x=x, y=y, dx=dx, dy=dy, event_input="mouse", event_type="on scroll")
+        self._to_call_event(data)
+
+    def on_press(self, key):
+        data = PynputEvent(key=key, event_input="keyboard", cursor_pos=self.get_cursor_pos(), event_type="key down")
+        self._to_call_event(data)
+
+    def on_release(self, key):
+        data = PynputEvent(key=key, event_input="keyboard", cursor_pos=self.get_cursor_pos(), event_type="key up")
+        self._to_call_event(data)
+
+    def on_input(self, callback: callable = None, keyboard: bool = True, mouse: bool = False, core: str = "pywinauto"):
         if isinstance(callback, bool):
             keyboard: bool = callback
             callback = None
 
-        self.hook = pywinauto.win32_hooks.Hook()
+        self.core: str = core
 
-        def add_event(func):
-            self._to_call_event: callable = func
-            self.hook.handler = self.on_event
-            threading.Thread(target=self.hook.hook, kwargs={"keyboard": keyboard, "mouse": mouse}).start()
-            # self.hook.hook(keyboard=keyboard, mouse=mouse)
-            return func
+        if core == "pywinauto":
+            import pywinauto.win32_hooks
 
-        if callable(callback):
-            return add_event(callback)
+            self.k_listener: bool = keyboard
+            self.m_listener: bool = mouse
 
-        return add_event
+            self.hook = pywinauto.win32_hooks.Hook()
+
+            def add_event1(func):
+                self._to_call_event: callable = func
+                self.hook.handler = self.on_event1
+                threading.Thread(target=self.hook.hook, kwargs={"keyboard": keyboard, "mouse": mouse}).start()
+                # self.hook.hook(keyboard=keyboard, mouse=mouse)
+                return func
+
+            if callable(callback):
+                return add_event1(callback)
+
+            return add_event1
+
+        elif core == "pynput":
+            self.k_listener = None
+            self.m_listener = None
+
+            if keyboard:
+                import pynput.keyboard
+
+                self.k_listener = pynput.keyboard.Listener(
+                    on_press=self.on_press,
+                    on_release=self.on_release
+                )
+
+                self.k_listener.start()
+
+            if mouse:
+                import pynput.mouse
+
+                self.m_listener = pynput.mouse.Listener(
+                    on_move=self.on_move,
+                    on_click=self.on_click,
+                    on_scroll=self.on_scroll
+                )
+
+                self.m_listener.start()
+
+            def add_event2(func):
+                self._to_call_event: callable = func
+
+                if self.k_listener is not None:
+                    self.k_listener.join()
+
+                if self.m_listener is not None:
+                    self.m_listener.join()
+
+            if callable(callback):
+                return add_event2(callback)
+
+            return add_event2

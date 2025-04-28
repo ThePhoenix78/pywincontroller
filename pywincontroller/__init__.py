@@ -1,1 +1,2 @@
-from .pywincontroller import WinController, RECT
+from .pywincontroller import WinController
+from .utils import RECT, COORDS
