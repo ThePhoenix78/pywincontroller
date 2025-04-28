@@ -58,7 +58,7 @@ Controls a Windows application window.
 
 #### Callback / Decorator :
 - `on_update(callback)`: Registers an update callback function.
-
+- `on_input(callback, keyboard: bool = True, mouse: bool = False, core: str = "pywinauto") # core="pynput"`
 
 ## Usage Example
 ```python
