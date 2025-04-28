@@ -5,7 +5,8 @@ PyWinController is a Python module that provides an interface for interacting wi
 
 ## Requirements
 - Python 3.x
-- `pywinauto` library
+- `pywinauto`
+- `pynput` (optional)
 
 ## Installation
 ```sh
