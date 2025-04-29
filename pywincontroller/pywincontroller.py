@@ -27,9 +27,14 @@ class WinController:
 
         self.test: str = "no"
 
-        if main_process is not None and process_name is not None:
+        if main_process is not None:
             try:
                 self.app = pywinauto.Application().connect(path=self.main_process)
+            except Exception as e:
+                print("WARNING", type(e), e)
+
+        if process_name is not None:
+            try:
                 self.main_win = self.app[self.process_name]
                 self._focus: bool = True
             except Exception as e:
@@ -37,6 +42,8 @@ class WinController:
 
         self.actions: dict = {}
         self.last_buttons: list = [[], []]
+
+        self._click_option: str = "on click"
 
         if self.main_win is not None:
             self.update_window()
@@ -304,9 +311,13 @@ class WinController:
         self._to_call_event(data)
 
     def on_click(self, x, y, button, pressed):
-        print(pressed)
-        data = PynputEvent(x=x, y=y, button=button, pressed=pressed, event_input="mouse", event_type="on click")
-        self._to_call_event(data)
+        if pressed and self._click_option in ["on press", "on click"]:
+            data = PynputEvent(x=x, y=y, button=button, pressed=pressed, event_input="mouse", event_type="on click")
+            self._to_call_event(data)
+
+        if not pressed and self._click_option in ["on release", "on click"]:
+            data = PynputEvent(x=x, y=y, button=button, pressed=pressed, event_input="mouse", event_type="on click")
+            self._to_call_event(data)
 
     def on_scroll(self, x, y, dx, dy):
         data = PynputEvent(x=x, y=y, dx=dx, dy=dy, event_input="mouse", event_type="on scroll")
@@ -320,7 +331,7 @@ class WinController:
         data = PynputEvent(key=key, event_input="keyboard", cursor_pos=self.get_cursor_pos(), event_type="key up")
         self._to_call_event(data)
 
-    def on_input(self, callback: callable = None, keyboard: bool = True, mouse: bool = False, core: str = "pywinauto"):
+    def on_input(self, callback: callable = None, keyboard: dict = {"on press": True, "on release": False}, mouse: dict = {"on move": False, "on click": True, "on scroll": False}, core: str = "pynput"):
         if isinstance(callback, bool):
             keyboard: bool = callback
             callback = None
@@ -330,15 +341,15 @@ class WinController:
         if core == "pywinauto":
             import pywinauto.win32_hooks
 
-            self.k_listener: bool = keyboard
-            self.m_listener: bool = mouse
+            self.k_listener: bool = True if True in keyboard.values() else False
+            self.m_listener: bool = True if True in mouse.values() else False
 
             self.hook = pywinauto.win32_hooks.Hook()
 
             def add_event1(func):
                 self._to_call_event: callable = func
                 self.hook.handler = self.on_event1
-                threading.Thread(target=self.hook.hook, kwargs={"keyboard": keyboard, "mouse": mouse}).start()
+                threading.Thread(target=self.hook.hook, kwargs={"keyboard": self.k_listener, "mouse": self.m_listener}).start()
                 # self.hook.hook(keyboard=keyboard, mouse=mouse)
                 return func
 
@@ -354,9 +365,12 @@ class WinController:
             if keyboard:
                 import pynput.keyboard
 
+                if keyboard == True:
+                    keyboard: dict = {"on press": True, "on release": True}
+
                 self.k_listener = pynput.keyboard.Listener(
-                    on_press=self.on_press,
-                    on_release=self.on_release
+                    on_press=self.on_press if keyboard.get("on press") else None,
+                    on_release=self.on_release if keyboard.get("on release") else None
                 )
 
                 self.k_listener.start()
@@ -364,10 +378,25 @@ class WinController:
             if mouse:
                 import pynput.mouse
 
+                if mouse == True:
+                    mouse: dict = {"on move": False, "on click": True, "on scroll": False}
+
+                if mouse.get("on click"):
+                    self._click_option: str = "on click"
+                    mouse["on click"] = True
+
+                elif mouse.get("on press"):
+                    self._click_option: str = "on press"
+                    mouse["on click"] = True
+
+                elif mouse.get("on release"):
+                    self._click_option: str = "on release"
+                    mouse["on click"] = True
+
                 self.m_listener = pynput.mouse.Listener(
-                    on_move=self.on_move,
-                    on_click=self.on_click,
-                    on_scroll=self.on_scroll
+                    on_move=self.on_move if mouse.get("on move") else None,
+                    on_click=self.on_click if mouse.get("on click") else None,
+                    on_scroll=self.on_scroll if mouse.get("on scroll") else None
                 )
 
                 self.m_listener.start()
