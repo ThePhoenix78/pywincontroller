@@ -25,7 +25,7 @@ class RECT():
         self.left: int = left if left is not None else _left
         self.top: int = top if top is not None else _top
 
-        if not self.left or not self.top:
+        if self.left is None and self.top is None:
             raise "Error, set at least a width or height with center"
 
         if right is not None:
@@ -60,6 +60,9 @@ class RECT():
         x: int = self.left + int(float(self._width) / 2.)
         y: int = self.top + int(float(self._height) / 2.)
         return COORDS(x, y)
+
+    def rectangle(self):
+        return self
 
 
 class InputEvent:

@@ -45,34 +45,46 @@ class WinController:
 
         self._click_option: str = "on click"
 
-        if self.main_win is not None:
-            self.update_window()
+        self.update_window()
+        if self.main_win:
             self.focus()
 
     def update_window(self):
-        rect = self.main_win.rectangle()
+        if self.main_win is not None:
+            rect = self.main_win.rectangle()
 
-        self.left, self.top, self.bottom, self.right, self.width, self.height, self.middle = rect.left, rect.top, rect.bottom, rect.right, rect.width(), rect.height(), rect.mid_point()
-        self.windows = [self.left, self.top, self.width, self.height]
-        self.rect = RECT(left=self.left, top=self.top, right=self.right, bottom=self.bottom, width=self.width, height=self.height)
+            self.left, self.top, self.bottom, self.right, self.width, self.height, self.middle = rect.left, rect.top, rect.bottom, rect.right, rect.width(), rect.height(), rect.mid_point()
+            self.windows = [self.left, self.top, self.width, self.height]
+            self.rect = RECT(left=self.left, top=self.top, right=self.right, bottom=self.bottom, width=self.width, height=self.height)
+
+        else:
+            self.right, self.bottom = windll.user32.GetSystemMetrics(0), windll.user32.GetSystemMetrics(1)
+            self.rect: RECT = RECT(left=0, top=0, right=self.right, bottom=self.bottom, width=self.right, height=self.bottom)
+            self.left, self.top, self.bottom, self.right, self.width, self.height, self.middle = self.rect.left, self.rect.top, self.rect.bottom, self.rect.right, self.rect.width(), self.rect.height(), self.rect.mid_point()
+            self.windows = [self.left, self.top, self.width, self.height]
 
     def to_image(self):
-        return self.main_win.capture_as_image(self.main_win.rectangle())
+        if self.main_win:
+            return self.main_win.capture_as_image(self.main_win.rectangle())
+        else:
+            return pywinauto.base_wrapper.BaseWrapper.capture_as_image(RECT())
 
     def get_cursor_pos(self):
         cursor = wintypes.POINT()
         windll.user32.GetCursorPos(byref(cursor))
         return COORDS(cursor.x, cursor.y)
 
-    def get_capture(self, size: int, center: tuple = None):
+    def get_capture(self, size: int = 100, center: tuple = None):
         if isinstance(center, tuple) or isinstance(center, list):
             center: COORDS = COORDS(center[0], center[1])
 
         elif center is None:
             center: COORDS = self.get_cursor_pos()
 
-        rect: RECT = RECT(width=size, middle=center)
-        return self.main_win.capture_as_image(rect)
+        if self.main_win:
+            return self.main_win.capture_as_image(RECT(width=size, middle=center))
+        else:
+            return pywinauto.base_wrapper.BaseWrapper.capture_as_image(RECT(width=size, middle=center))
 
     def stop(self):
         self._run: bool = False
